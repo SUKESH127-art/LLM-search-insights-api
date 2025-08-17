@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+
 
 # Import project components
 from database import engine, Base, AsyncSessionLocal
@@ -20,7 +20,7 @@ from schemas import (
     StatusEnum,
 )
 # We will create this function in the next step, for now, we import it.
-# from analysis.core import run_full_analysis 
+from analysis.core import run_full_analysis 
 
 # --- Application Lifecycle ---
 
@@ -86,13 +86,14 @@ async def submit_analysis(
         id=str(uuid.uuid4()),
         research_question=request.research_question,
         status=StatusEnum.QUEUED,
+        progress=0,
     )
     db.add(new_analysis)
     await db.commit()
     await db.refresh(new_analysis)
 
     # TODO: In the next step, we will uncomment this line.
-    # background_tasks.add_task(run_full_analysis, new_analysis.id, db)
+    background_tasks.add_task(run_full_analysis, new_analysis.id)
 
     return new_analysis
 
