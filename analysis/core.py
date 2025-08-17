@@ -71,7 +71,7 @@ async def _simulate_chatgpt_response(question: str) -> ChatGPTResponse:
     return mock_chatgpt_response
 
 
-# --- Database Interaction Functions (Unchanged) ---
+# --- Database Interaction Functions ---
 
 async def update_job_status(analysis_id: str, status: StatusEnum, progress: int = 0, current_step: str = ""):
     async with AsyncSessionLocal() as session:

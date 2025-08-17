@@ -1,5 +1,9 @@
 # main.py
 
+from datetime import datetime, timezone, timedelta
+from dotenv import load_dotenv
+load_dotenv()
+
 import uuid
 from contextlib import asynccontextmanager
 
@@ -135,13 +139,12 @@ async def get_analysis_result(analysis_id: str, db: AsyncSession = Depends(get_d
     """
     analysis = await db.get(Analysis, analysis_id)
     
-    # Per TDD, return 404 if not found, expired, or not yet complete
+    # Per TDD, return 404 if not found or not yet complete
+    # TODO: Implement expiration filtering once datetime handling is resolved
     if not analysis or analysis.status != StatusEnum.COMPLETE:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"error": ErrorType.NOT_FOUND, "details": {"message": "Result not found or not complete"}},
         )
         
-    # TODO: Query-time filtering for expiration
-    
     return analysis.full_result

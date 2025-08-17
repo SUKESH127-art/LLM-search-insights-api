@@ -46,9 +46,7 @@ class StatusResponse(BaseModel):
     error_message: Optional[str] = None
 
 # --- Schemas for the Final Result Payload ---
-# These are currently placeholders as defined in the TDD.
-# In a real project, these would be fleshed out with the actual fields.
-# For now, we are defining them so our FullAnalysisResult has the correct structure.
+# Schemas defining the structure of the final analysis report.
 
 class BrandRanking(BaseModel):
     brand_name: str

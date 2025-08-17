@@ -17,8 +17,7 @@ DATABASE_NAMING_CONVENTION = {
     "pk": "pk_%(table_name)s"
 }
 
-# Load environment variables from .env file
-load_dotenv()
+# Environment variables loaded centrally in main.py
 
 # Use SQLite for development (can be overridden by DATABASE_URL env var)
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./llm_insights.db")

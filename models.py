@@ -5,13 +5,10 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import String, DateTime, Integer, JSON, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from database import Base
-from schemas import StatusEnum # This import will still be resolved in the next step
+from schemas import StatusEnum
 
 # Load CACHE_TTL_HOURS from .env
 import os
-from dotenv import load_dotenv
-
-load_dotenv()
 CACHE_TTL_HOURS = int(os.getenv("CACHE_TTL_HOURS", 24))
 
 def get_expiration_time():
