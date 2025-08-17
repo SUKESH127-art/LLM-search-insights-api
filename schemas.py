@@ -48,14 +48,11 @@ class StatusResponse(BaseModel):
 # --- Schemas for the Final Result Payload ---
 # Schemas defining the structure of the final analysis report.
 
-class BrandRanking(BaseModel):
-    brand_name: str
-    rank: int
-    mentions: int
-
 class WebAnalysis(BaseModel):
-    rankings: List[BrandRanking]
-    summary: str
+    source: str
+    content: str
+    timestamp: datetime
+    confidence_score: float
 
 class ChatGPTResponse(BaseModel):
     simulated_response: str

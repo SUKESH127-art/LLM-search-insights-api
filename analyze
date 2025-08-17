@@ -1,0 +1,11 @@
+#!/bin/bash
+# Simple alias script for the LLM Search Insight analysis CLI
+# Usage: ./analyze "Your research question here"
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Activate virtual environment and run the analysis
+cd "$SCRIPT_DIR"
+source venv/bin/activate
+python3 analyze.py "$@"

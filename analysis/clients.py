@@ -18,19 +18,22 @@ if not brightdata_api_key:
 # The library automatically handles authentication by reading the OPENAI_API_KEY env var.
 openai_client = AsyncOpenAI()
 
-# Initialize the HTTPX async client for BrightData
-# We use a context manager (`async with`) when making calls, but we can define
-# the base URL and headers for reuse here.
-BRIGHTDATA_API_BASE_URL = "https://api.brightdata.com/serp/req"
-brightdata_headers = {
+# BrightData SERP API configuration
+BRIGHTDATA_API_URL = "https://api.brightdata.com/request"
+BRIGHTDATA_API_HEADERS = {
     "Authorization": f"Bearer {brightdata_api_key}",
-    "Content-Type": "application/json",
+    "Content-Type": "application/json"
 }
 
-# You can also create a long-lived client instance if you need to manage
-# connection pooling, timeouts, and other advanced configurations.
-http_client = httpx.AsyncClient(
-    headers=brightdata_headers,
-    base_url=BRIGHTDATA_API_BASE_URL,
-    timeout=30.0 # Set a default timeout for all requests
+# Create a client for BrightData SERP API calls
+serp_client = httpx.AsyncClient(
+    headers=BRIGHTDATA_API_HEADERS,
+    timeout=30.0
 )
+
+# Keep the old client for backward compatibility (can be removed later)
+http_client = None
+mcp_client = None
+BRIGHTDATA_MCP_URL = None
+BRIGHTDATA_MCP_TOOLS = None
+web_unlocker_client = None

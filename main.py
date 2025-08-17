@@ -149,3 +149,7 @@ async def get_analysis_result(analysis_id: str, db: AsyncSession = Depends(get_d
         )
         
     return analysis.full_result
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
