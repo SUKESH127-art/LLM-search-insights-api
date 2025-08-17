@@ -3,119 +3,147 @@
 import asyncio
 from datetime import datetime, timezone
 
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import update
 
+# Import our new clients
+from analysis.clients import openai_client, http_client, BRIGHTDATA_API_BASE_URL
 from database import AsyncSessionLocal
 from models import Analysis
-from schemas import StatusEnum, FullAnalysisResult, WebAnalysis, ChatGPTResponse, VisualizationData, BrandRanking
+from schemas import (
+    StatusEnum,
+    FullAnalysisResult,
+    WebAnalysis,
+    ChatGPTResponse,
+    VisualizationData,
+    BrandRanking,
+)
 
+
+# --- Private Helper Functions for API Calls ---
+
+async def _perform_web_analysis(question: str) -> WebAnalysis:
+    """
+    Simulates the multi-step process of using BrightData for search
+    and OpenAI for summarizing the results.
+    """
+    print(f"Performing web analysis for: '{question}'")
+    # In a real implementation:
+    # 1. Construct the BrightData SERP API payload
+    # payload = {"country": "US", "query": question}
+    # 2. Make the async call using our http_client
+    # response = await http_client.post("/", json=payload)
+    # response.raise_for_status() # Raise an exception for bad status codes
+    # search_results = response.json()
+    # 3. Pass search_results to an OpenAI model for summarization and ranking
+    
+    # For now, we simulate the delay and return mock data.
+    await asyncio.sleep(5) 
+    
+    mock_web_analysis = WebAnalysis(
+        rankings=[BrandRanking(brand_name="Brand A (from Web)", rank=1, mentions=10)],
+        summary="Based on web search, Brand A is the clear leader."
+    )
+    return mock_web_analysis
+
+async def _simulate_chatgpt_response(question: str) -> ChatGPTResponse:
+    """
+    Simulates a direct query to OpenAI to get a generative response.
+    """
+    print(f"Simulating direct ChatGPT response for: '{question}'")
+    # In a real implementation:
+    # response = await openai_client.chat.completions.create(
+    #     model="gpt-4o-mini",
+    #     messages=[
+    #         {"role": "system", "content": "You are a helpful assistant."},
+    #         {"role": "user", "content": question},
+    #     ],
+    # )
+    # simulated_text = response.choices[0].message.content
+    # Then, a second call might be needed to extract brand names from the text.
+    
+    # For now, we simulate the delay and return mock data.
+    await asyncio.sleep(3)
+
+    mock_chatgpt_response = ChatGPTResponse(
+        simulated_response="When asked directly, ChatGPT tends to mention Brand B as a strong competitor.",
+        identified_brands=["Brand B (from GPT)"]
+    )
+    return mock_chatgpt_response
+
+
+# --- Database Interaction Functions (Unchanged) ---
 
 async def update_job_status(analysis_id: str, status: StatusEnum, progress: int = 0, current_step: str = ""):
-    """A helper function to update the job status in the database."""
     async with AsyncSessionLocal() as session:
         async with session.begin():
-            stmt = (
-                update(Analysis)
-                .where(Analysis.id == analysis_id)
-                .values(status=status, progress=progress, current_step=current_step)
-            )
+            stmt = update(Analysis).where(Analysis.id == analysis_id).values(status=status, progress=progress, current_step=current_step)
             await session.execute(stmt)
 
 async def save_final_result(analysis_id: str, result: dict):
-    """A helper function to save the final result and mark the job as COMPLETE."""
     async with AsyncSessionLocal() as session:
         async with session.begin():
-            stmt = (
-                update(Analysis)
-                .where(Analysis.id == analysis_id)
-                .values(
-                    status=StatusEnum.COMPLETE,
-                    progress=100,
-                    current_step="Finished",
-                    full_result=result, # result is already a dict
-                )
-            )
+            stmt = update(Analysis).where(Analysis.id == analysis_id).values(status=StatusEnum.COMPLETE, progress=100, current_step="Finished", full_result=result)
             await session.execute(stmt)
 
 async def handle_error(analysis_id: str, error_message: str):
-    """A helper function to log an error and mark the job as ERROR."""
     async with AsyncSessionLocal() as session:
         async with session.begin():
-            stmt = (
-                update(Analysis)
-                .where(Analysis.id == analysis_id)
-                .values(
-                    status=StatusEnum.ERROR,
-                    error_message=error_message,
-                    current_step="Error",
-                )
-            )
+            stmt = update(Analysis).where(Analysis.id == analysis_id).values(status=StatusEnum.ERROR, error_message=error_message, current_step="Error")
             await session.execute(stmt)
 
 
+# --- Main Background Task (Refactored) ---
+
 async def run_full_analysis(analysis_id: str):
     """
-    The main background task for running the full analysis.
-    This function simulates a multi-step process with API calls.
+    The main background task orchestrator.
     """
     print(f"Starting analysis for job ID: {analysis_id}")
     try:
-        # Step 1: Set status to PROCESSING
-        await update_job_status(
-            analysis_id, StatusEnum.PROCESSING, progress=10, current_step="Initializing analysis"
-        )
-        await asyncio.sleep(2) # Simulate work
+        await update_job_status(analysis_id, StatusEnum.PROCESSING, 10, "Fetching research question")
 
-        # Step 2: Simulate SCRAPING phase
-        await update_job_status(
-            analysis_id, StatusEnum.SCRAPING, progress=30, current_step="Calling BrightData and OpenAI for web analysis"
-        )
-        # In a real implementation, this is where you would use httpx and openai clients
-        await asyncio.sleep(5) # Simulate long API call
-        print(f"[{analysis_id}] Scraping phase complete.")
-
-        # Step 3: Simulate SYNTHESIZING phase
-        await update_job_status(
-            analysis_id, StatusEnum.SYNTHESIZING, progress=75, current_step="Synthesizing results and generating insights"
-        )
-        await asyncio.sleep(3) # Simulate data processing
-        print(f"[{analysis_id}] Synthesizing phase complete.")
-
-        # Step 4: Create mock final result object
-        # First, get the original question from the DB
         async with AsyncSessionLocal() as session:
             analysis_record = await session.get(Analysis, analysis_id)
             if not analysis_record:
-                raise ValueError("Analysis record not found in database during final step.")
+                raise ValueError("Analysis record not found at start of analysis.")
             research_question = analysis_record.research_question
 
-        # Now, build the final result Pydantic model
+        await update_job_status(analysis_id, StatusEnum.PROCESSING, 20, "Starting parallel data gathering")
+
+        # --- Parallel Execution using asyncio.gather ---
+        # This is the core of our async optimization.
+        results = await asyncio.gather(
+            _perform_web_analysis(research_question),
+            _simulate_chatgpt_response(research_question)
+        )
+        
+        web_analysis_result: WebAnalysis = results[0]
+        chatgpt_simulation_result: ChatGPTResponse = results[1]
+        
+        print(f"[{analysis_id}] Parallel data gathering complete.")
+        
+        await update_job_status(analysis_id, StatusEnum.SYNTHESIZING, 75, "Synthesizing final report")
+
+        # --- Synthesis Step ---
+        # Here you could add logic to create a better visualization based on both results
+        final_visualization = VisualizationData(
+            chart_type="comparison_bar",
+            data={"Web Mentions": web_analysis_result.rankings[0].mentions, "GPT Mentions": 1} # Mocking a GPT mention count
+        )
+
         final_result = FullAnalysisResult(
             analysis_id=analysis_id,
             research_question=research_question,
             completed_at=datetime.now(timezone.utc),
-            web_results=WebAnalysis(
-                rankings=[BrandRanking(brand_name="Brand A", rank=1, mentions=10)],
-                summary="Brand A is dominant in web search results."
-            ),
-            chatgpt_simulation=ChatGPTResponse(
-                simulated_response="In my simulation, Brand B was mentioned.",
-                identified_brands=["Brand B"]
-            ),
-            visualization=VisualizationData(
-                chart_type="bar",
-                data={"Brand A": 10, "Brand B": 5}
-            )
+            web_results=web_analysis_result,
+            chatgpt_simulation=chatgpt_simulation_result,
+            visualization=final_visualization,
         )
 
-        # Convert to dict and handle datetime serialization
         result_dict = final_result.model_dump()
-        # Convert datetime to ISO string for JSON storage
         if 'completed_at' in result_dict:
             result_dict['completed_at'] = result_dict['completed_at'].isoformat()
 
-        # Step 5: Save the final result to the database
         await save_final_result(analysis_id, result_dict)
         print(f"Successfully completed analysis for job ID: {analysis_id}")
 
