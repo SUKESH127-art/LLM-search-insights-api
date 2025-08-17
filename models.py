@@ -2,10 +2,13 @@
 
 import uuid
 from datetime import datetime, timedelta, timezone
-from sqlalchemy import String, DateTime, Integer, JSON, Text
+from sqlalchemy import String, DateTime, Integer, JSON, Text, TypeDecorator
 from sqlalchemy.orm import Mapped, mapped_column
 from database import Base
 from schemas import StatusEnum
+
+
+# TZDateTime TypeDecorator removed for now - will implement proper datetime handling in the endpoint
 
 # Load CACHE_TTL_HOURS from .env
 import os

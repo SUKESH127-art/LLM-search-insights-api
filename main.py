@@ -140,7 +140,8 @@ async def get_analysis_result(analysis_id: str, db: AsyncSession = Depends(get_d
     analysis = await db.get(Analysis, analysis_id)
     
     # Per TDD, return 404 if not found or not yet complete
-    # TODO: Implement expiration filtering once datetime handling is resolved
+    # TODO: Implement expiration filtering - currently disabled due to SQLite datetime handling complexity
+    # The TZDateTime TypeDecorator approach needs further investigation for proper implementation
     if not analysis or analysis.status != StatusEnum.COMPLETE:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
