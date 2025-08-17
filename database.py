@@ -2,12 +2,14 @@
 
 import os
 from dotenv import load_dotenv
+from sqlalchemy import MetaData
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase
 
 # Define a naming convention for all database constraints.
 # This makes your database schema clean and predictable.
-POSTGRES_INDEXES_NAMING_CONVENTION = {
+# These conventions work with both PostgreSQL and SQLite
+DATABASE_NAMING_CONVENTION = {
     "ix": "ix_%(column_0_label)s",
     "uq": "uq_%(table_name)s_%(column_0_name)s",
     "ck": "ck_%(table_name)s_%(constraint_name)s",
@@ -18,20 +20,16 @@ POSTGRES_INDEXES_NAMING_CONVENTION = {
 # Load environment variables from .env file
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+# Use SQLite for development (can be overridden by DATABASE_URL env var)
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./llm_insights.db")
 
-if not DATABASE_URL:
-    raise ValueError("DATABASE_URL environment variable not set")
-
-# TODO: change back echo=true in prod
 engine = create_async_engine(DATABASE_URL, echo=True)
 
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 # Create a MetaData object with the naming convention
-metadata_obj = MetaData(naming_convention=POSTGRES_INDEXES_NAMING_CONVENTION)
+metadata_obj = MetaData(naming_convention=DATABASE_NAMING_CONVENTION)
 
 # Create a new Base class with AsyncAttrs support
-# This is the modern SQLAlchemy 2.0 approach
 class Base(AsyncAttrs, DeclarativeBase):
     metadata = metadata_obj

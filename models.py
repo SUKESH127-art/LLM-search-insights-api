@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import String, DateTime, Integer, JSON, Text
 from sqlalchemy.orm import Mapped, mapped_column
-from .database import Base
+from database import Base
 from schemas import StatusEnum # This import will still be resolved in the next step
 
 # Load CACHE_TTL_HOURS from .env
