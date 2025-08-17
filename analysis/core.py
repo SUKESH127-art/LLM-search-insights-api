@@ -22,7 +22,7 @@ async def update_job_status(analysis_id: str, status: StatusEnum, progress: int 
             )
             await session.execute(stmt)
 
-async def save_final_result(analysis_id: str, result: FullAnalysisResult):
+async def save_final_result(analysis_id: str, result: dict):
     """A helper function to save the final result and mark the job as COMPLETE."""
     async with AsyncSessionLocal() as session:
         async with session.begin():
@@ -109,8 +109,14 @@ async def run_full_analysis(analysis_id: str):
             )
         )
 
+        # Convert to dict and handle datetime serialization
+        result_dict = final_result.model_dump()
+        # Convert datetime to ISO string for JSON storage
+        if 'completed_at' in result_dict:
+            result_dict['completed_at'] = result_dict['completed_at'].isoformat()
+
         # Step 5: Save the final result to the database
-        await save_final_result(analysis_id, final_result)
+        await save_final_result(analysis_id, result_dict)
         print(f"Successfully completed analysis for job ID: {analysis_id}")
 
     except Exception as e:
