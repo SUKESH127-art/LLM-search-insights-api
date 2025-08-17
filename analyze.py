@@ -228,7 +228,7 @@ def main():
     """Main entry point."""
     if len(sys.argv) != 2:
         print(f"{Colors.FAIL}Usage: python3 analyze.py \"Your research question here\"{Colors.ENDC}")
-        print(f"{Colors.WARNING}Example: python3 analyze.py \"What are the best authentication providers for React?\"{Colors.ENDC}")
+        print(f"{Colors.WARNING}Example: python3 analyze.py \"What are the best frontend frameworks for 2024?\"{Colors.ENDC}")
         sys.exit(1)
     
     question = sys.argv[1]

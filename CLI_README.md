@@ -37,9 +37,9 @@ python3 analyze.py "Your research question here"
 
 ## 📝 Examples
 
-### Authentication Providers
+### **Technology Research**
 ```bash
-./analyze "What are the best authentication providers for a React web application?"
+./analyze "What are the best frontend frameworks for 2024?"
 ```
 
 ### Machine Learning Trends

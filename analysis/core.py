@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from sqlalchemy import update
 
 # Import our new clients
-from analysis.clients import openai_client, serp_client, BRIGHTDATA_API_URL
+from analysis.clients import openai_client, web_unlocker_client, BRIGHTDATA_API_URL
 from database import AsyncSessionLocal
 from models import Analysis
 from schemas import (
@@ -28,58 +28,40 @@ async def _perform_web_analysis(question: str) -> WebAnalysis:
     print(f"Performing real web analysis for: '{question}'")
     
     try:
-        # Step 1: Use BrightData SERP API to extract web data
-        print("   🔍 Extracting web data via BrightData SERP API...")
-        
-        # Create SERP API request for web search
-        # Using the correct zone and format as shown in the example
-        serp_payload = {
-            "zone": "serp_api1",  # Using the serp_api1 zone as shown in the example
+        # Step 1: Use BrightData Web Unlocker API to extract web data
+        print("   🔍 Extracting web data via BrightData Web Unlocker API...")
+
+        # Create Web Unlocker API request for web scraping
+        # Using a relevant website to search for information
+        web_unlocker_payload = {
+            "zone": "web_unlocker1",  # Using the web_unlocker1 zone
             "url": f"https://www.google.com/search?q={question.replace(' ', '+')}",
-            "format": "json"  # Using JSON format for structured data
+            "format": "raw"
         }
         
-        # Make the SERP API call
-        print(f"   🔍 Making SERP API call to: {BRIGHTDATA_API_URL}")
-        print(f"   📝 Payload: {serp_payload}")
+        # Make the Web Unlocker API call
+        print(f"   🔍 Making Web Unlocker API call to: {BRIGHTDATA_API_URL}")
+        print(f"   📝 Payload: {web_unlocker_payload}")
         
-        response = await serp_client.post(BRIGHTDATA_API_URL, json=serp_payload)
+        response = await web_unlocker_client.post(BRIGHTDATA_API_URL, json=web_unlocker_payload)
         print(f"   📊 Response status: {response.status_code}")
         print(f"   📊 Response headers: {dict(response.headers)}")
         
         response.raise_for_status()
         
-        # Handle SERP API response - it should be JSON format
-        try:
-            serp_data = response.json()
-            print(f"   ✅ Web data extracted via SERP API (JSON format)")
-            
-            # Extract relevant information from SERP results
-            if isinstance(serp_data, dict) and 'organic_results' in serp_data:
-                # Format the organic search results for analysis
-                results = serp_data['organic_results']
-                formatted_results = []
-                for i, result in enumerate(results[:5], 1):  # Take top 5 results
-                    title = result.get('title', 'No title')
-                    snippet = result.get('snippet', 'No snippet')
-                    url = result.get('link', 'No URL')
-                    formatted_results.append(f"{i}. {title}\n   {snippet}\n   URL: {url}\n")
-                
-                serp_data = "\n".join(formatted_results)
-            else:
-                # If no organic results, use the raw data
-                serp_data = str(serp_data)
-                
-        except ValueError as e:
-            # If JSON parsing fails, use text content
-            print(f"   ⚠️  JSON parsing failed: {e}, using raw text")
-            serp_data = response.text
+        # Handle Web Unlocker API response - it should be raw HTML/text
+        response_text = response.text
+        print(f"   📄 Raw response length: {len(response_text)} characters")
+        print(f"   📄 Response preview: {response_text[:200]}...")
+        
+        # Use the raw response text for analysis
+        serp_data = response_text
         
         # Limit the data size to avoid overwhelming OpenAI
         if len(serp_data) > 5000:
             serp_data = serp_data[:5000] + "... [truncated]"
         
-        print(f"   ✅ Web data extracted via SERP API")
+        print(f"   ✅ Web data extracted via Web Unlocker API")
         
         # Step 2: Use OpenAI to analyze and summarize the web data
         print("   🤖 Analyzing web data with OpenAI...")
@@ -112,10 +94,10 @@ async def _perform_web_analysis(question: str) -> WebAnalysis:
         
         # Create WebAnalysis object
         web_analysis = WebAnalysis(
-            source="BrightData SERP API + OpenAI",
+            source="BrightData Web Unlocker API + OpenAI",
             content=analysis_text,
             timestamp=datetime.now(timezone.utc),
-            confidence_score=0.90  # High confidence for SERP + OpenAI analysis
+            confidence_score=0.90  # High confidence for Web Unlocker + OpenAI analysis
         )
         
         print(f"   ✅ Web analysis completed successfully")
@@ -133,32 +115,29 @@ async def _perform_web_analysis(question: str) -> WebAnalysis:
 
 async def _simulate_chatgpt_response(question: str) -> ChatGPTResponse:
     """
-    Gets a real response from OpenAI about authentication providers.
+    Gets a real response from OpenAI about the user's question.
     """
     print(f"Getting real OpenAI response for: '{question}'")
     
     try:
-        # Create a specialized prompt for authentication provider analysis
-        auth_prompt = f"""
-        You are an expert technology consultant specializing in authentication and security solutions.
+        # Create a completely generic prompt
+        generic_prompt = f"""
+        Answer this question: "{question}"
         
-        Please provide a comprehensive answer to: "{question}"
+        Provide a comprehensive, well-structured response that includes:
+        1. Clear explanation of the topic
+        2. Key points and insights
+        3. Practical examples or use cases
+        4. Recommendations or best practices
         
-        Include:
-        1. A detailed analysis of the best authentication providers
-        2. Key factors to consider when choosing
-        3. Specific recommendations for different use cases
-        4. Any important security considerations
-        
-        Make your response practical and actionable for developers and businesses.
+        Keep your response focused only on the question asked.
         """
         
         from analysis.clients import openai_client
         response = await openai_client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are an expert technology consultant specializing in authentication and security solutions. Provide practical, actionable advice."},
-                {"role": "user", "content": auth_prompt}
+                {"role": "user", "content": generic_prompt}
             ],
             max_tokens=1000,
             temperature=0.7
@@ -167,34 +146,31 @@ async def _simulate_chatgpt_response(question: str) -> ChatGPTResponse:
         response_text = response.choices[0].message.content
         print(f"   ✅ OpenAI response received: {len(response_text)} characters")
         
-        # Extract brand names from the response using another OpenAI call
-        brand_extraction_prompt = f"""
-        Extract the names of authentication providers mentioned in this text:
+        # Extract relevant entities from the response
+        entity_extraction_prompt = f"""
+        Extract the names of relevant companies, technologies, tools, or key entities mentioned in this text:
         
         {response_text}
         
-        Return only a JSON array of provider names, like:
-        ["Auth0", "Firebase Auth", "AWS Cognito"]
+        Return only a JSON array of entity names.
         """
         
-        brand_response = await openai_client.chat.completions.create(
-            model="gpt-4o-mini",
+        entity_response = await openai_client.chat.completions.create(
+            model="gpt-4o",
             messages=[
-                {"role": "system", "content": "Extract brand names from text and return as JSON array."},
-                {"role": "user", "content": brand_extraction_prompt}
+                {"role": "user", "content": entity_extraction_prompt}
             ],
             response_format={"type": "json_object"}
         )
         
-        brands_text = brand_response.choices[0].message.content
+        entities_text = entity_response.choices[0].message.content
         try:
-            brands_data = json.loads(brands_text)
-            identified_brands = brands_data.get('brands', []) if isinstance(brands_data, dict) else brands_data
+            entities_data = json.loads(entities_text)
+            identified_brands = entities_data.get('brands', []) if isinstance(entities_data, dict) else entities_data
         except json.JSONDecodeError:
-            # Fallback: extract brands manually from response
-            identified_brands = ["Auth0", "Firebase Auth", "AWS Cognito"]  # Common providers
+            identified_brands = []
         
-        print(f"   ✅ Brands extracted: {identified_brands}")
+        print(f"   ✅ Entities extracted: {identified_brands}")
         
         return ChatGPTResponse(
             simulated_response=response_text,
@@ -203,12 +179,12 @@ async def _simulate_chatgpt_response(question: str) -> ChatGPTResponse:
         
     except Exception as e:
         print(f"   ❌ Error in OpenAI call: {e}")
-        # Fallback to mock data if OpenAI calls fail
-        print("   🔄 Falling back to mock data due to OpenAI error")
+        # Fallback to generic response
+        print("   🔄 Falling back to generic response due to OpenAI error")
         
         fallback_response = ChatGPTResponse(
-            simulated_response="Based on my analysis, Auth0, Firebase Auth, and AWS Cognito are among the top authentication providers. Auth0 offers enterprise-grade features, Firebase Auth is excellent for mobile apps, and AWS Cognito integrates well with AWS services.",
-            identified_brands=["Auth0", "Firebase Auth", "AWS Cognito"]
+            simulated_response=f"I can provide information about '{question}', but I encountered an error accessing my knowledge base. For the most accurate and up-to-date information, I recommend consulting authoritative sources or conducting further research on this topic.",
+            identified_brands=[]
         )
         return fallback_response
 
