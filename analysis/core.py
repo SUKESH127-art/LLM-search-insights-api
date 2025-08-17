@@ -120,26 +120,18 @@ async def _simulate_chatgpt_response(question: str) -> ChatGPTResponse:
     print(f"Getting real OpenAI response for: '{question}'")
     
     try:
-        # Create a completely generic prompt
-        generic_prompt = f"""
-        Answer this question: "{question}"
-        
-        Provide a comprehensive, well-structured response that includes:
-        1. Clear explanation of the topic
-        2. Key points and insights
-        3. Practical examples or use cases
-        4. Recommendations or best practices
-        
-        Keep your response focused only on the question asked.
-        """
-        
+        # Use a completely different approach - direct question without complex prompting
         response = await openai_client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "user", "content": generic_prompt}
+                {
+                    "role": "system", 
+                    "content": "You are a helpful assistant. Answer questions directly and clearly."
+                },
+                {"role": "user", "content": question}
             ],
             max_tokens=1000,
-            temperature=0.7
+            temperature=0.3
         )
         
         response_text = response.choices[0].message.content
@@ -165,8 +157,9 @@ async def _simulate_chatgpt_response(question: str) -> ChatGPTResponse:
         entities_text = entity_response.choices[0].message.content
         try:
             entities_data = json.loads(entities_text)
-            identified_brands = entities_data.get('brands', []) if isinstance(entities_data, dict) else entities_data
-        except json.JSONDecodeError:
+            # Handle both list and dict formats from OpenAI JSON response
+            identified_brands = entities_data.get('entities', entities_data) if isinstance(entities_data, dict) else entities_data
+        except (json.JSONDecodeError, AttributeError):
             identified_brands = []
         
         print(f"   ✅ Entities extracted: {identified_brands}")
