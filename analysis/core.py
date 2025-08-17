@@ -33,7 +33,7 @@ async def save_final_result(analysis_id: str, result: dict):
                     status=StatusEnum.COMPLETE,
                     progress=100,
                     current_step="Finished",
-                    full_result=result.model_dump(), # Use model_dump for Pydantic v2
+                    full_result=result, # result is already a dict
                 )
             )
             await session.execute(stmt)
