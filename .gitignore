@@ -1,2 +1,5 @@
 # Environment variables
 .env
+
+# Gemini context file (not for repository)
+gemini_context.md
