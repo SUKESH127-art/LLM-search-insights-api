@@ -133,7 +133,6 @@ async def _simulate_chatgpt_response(question: str) -> ChatGPTResponse:
         Keep your response focused only on the question asked.
         """
         
-        from analysis.clients import openai_client
         response = await openai_client.chat.completions.create(
             model="gpt-4o",
             messages=[
