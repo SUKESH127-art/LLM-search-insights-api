@@ -92,10 +92,13 @@ async def submit_analysis(
     await db.commit()
     await db.refresh(new_analysis)
 
-    # TODO: In the next step, we will uncomment this line.
+    # Start the background analysis task
     background_tasks.add_task(run_full_analysis, new_analysis.id)
 
-    return new_analysis
+    return AnalysisResponse(
+        analysis_id=new_analysis.id,
+        status=new_analysis.status
+    )
 
 
 @app.get(
@@ -113,7 +116,12 @@ async def get_analysis_status(analysis_id: str, db: AsyncSession = Depends(get_d
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"error": ErrorType.NOT_FOUND, "details": {"message": "Analysis ID not found"}},
         )
-    return analysis
+    return StatusResponse(
+        status=analysis.status,
+        progress=analysis.progress,
+        current_step=analysis.current_step,
+        error_message=analysis.error_message
+    )
 
 
 @app.get(
