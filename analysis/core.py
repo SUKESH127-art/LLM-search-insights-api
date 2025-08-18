@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from sqlalchemy import update
 
 # Import our new clients
-from analysis.clients import openai_client, web_unlocker_client, BRIGHTDATA_API_URL
+from analysis.clients import openai_client, brightdata_client
 from database import AsyncSessionLocal
 from models import Analysis
 from schemas import (
@@ -23,69 +23,77 @@ from schemas import (
 
 async def _perform_web_analysis(question: str) -> WebAnalysis:
     """
-    Performs real web analysis using BrightData MCP and OpenAI for summarization.
+    Performs real web analysis using the BrightData SERP API (via Direct Access)
+    and OpenAI for summarization.
     """
-    print(f"Performing real web analysis for: '{question}'")
+    print(f"Performing SERP analysis for: '{question}'")
     
     try:
-        # Step 1: Use BrightData Web Unlocker API to extract web data
-        print("   🔍 Extracting web data via BrightData Web Unlocker API...")
+        # Step 1: Construct the target URL and payload as per documentation
+        print("   🔍 Preparing BrightData Direct API request...")
 
-        # Create Web Unlocker API request for web scraping
-        # Using a relevant website to search for information
-        web_unlocker_payload = {
-            "zone": "web_unlocker1",  # Using the web_unlocker1 zone
-            "url": f"https://www.google.com/search?q={question.replace(' ', '+')}",
+        # The query is part of the URL. We must add '&brd_json=1' to get parsed JSON.
+        target_url = f"https://www.google.com/search?q={question.replace(' ', '+')}&brd_json=1"
+
+        # The payload is simpler for direct access
+        payload = {
+            "zone": "serp_api1", 
+            "url": target_url,
             "format": "raw"
         }
         
-        # Make the Web Unlocker API call
-        print(f"   🔍 Making Web Unlocker API call to: {BRIGHTDATA_API_URL}")
-        print(f"   📝 Payload: {web_unlocker_payload}")
+        # Step 2: Make the API call using the correct client and endpoint
+        print(f"   📤 Sending request to BrightData...")
+        print(f"   📝 Payload: {payload}")
+        response = await brightdata_client.post(url="/", json=payload) # The base URL is already set in the client
         
-        response = await web_unlocker_client.post(BRIGHTDATA_API_URL, json=web_unlocker_payload)
-        print(f"   📊 Response status: {response.status_code}")
-        print(f"   📊 Response headers: {dict(response.headers)}")
+        # Add detailed error handling for debugging
+        if response.status_code != 200:
+            print(f"   ❌ BrightData API error: {response.status_code}")
+            print(f"   📄 Error response: {response.text}")
+            response.raise_for_status()
         
         response.raise_for_status()
         
-        # Handle Web Unlocker API response - it should be raw HTML/text
-        response_text = response.text
-        print(f"   📄 Raw response length: {len(response_text)} characters")
-        print(f"   📄 Response preview: {response_text[:200]}...")
+        search_results = response.json()
+        print("   ✅ Received structured JSON response from BrightData.")
         
-        # Use the raw response text for analysis
-        serp_data = response_text
+        # Step 3: Extract and combine the useful text snippets for the LLM
+        snippets = []
+        if isinstance(search_results, list): # Some responses are a list of results
+            search_results = search_results[0]
+
+        if search_results.get("organic"):
+            for result in search_results["organic"][:10]: # Use top 10 results
+                if result.get("title") and result.get("description"):
+                    snippets.append(f"Title: {result['title']}\nSnippet: {result['description']}\n---")
         
-        # Limit the data size to avoid overwhelming OpenAI
-        if len(serp_data) > 5000:
-            serp_data = serp_data[:5000] + "... [truncated]"
+        if not snippets:
+            # Add more context to the error for better debugging
+            raise ValueError(f"SERP API did not return any organic results. Response preview: {str(search_results)[:500]}")
+
+        serp_context = "\n".join(snippets)
         
-        print(f"   ✅ Web data extracted via Web Unlocker API")
+        if len(serp_context) > 8000:
+            serp_context = serp_context[:8000] + "... [truncated]"
         
-        # Step 2: Use OpenAI to analyze and summarize the web data
-        print("   🤖 Analyzing web data with OpenAI...")
+        print(f"   📄 Extracted context for LLM. Length: {len(serp_context)} characters.")
         
-        # Create a prompt for OpenAI to analyze the web data
+        # Step 4: Use OpenAI to analyze the snippets
+        print("   🤖 Analyzing SERP data with OpenAI...")
+        
         analysis_prompt = f"""
-        Based on the following web search results about "{question}":
+        Based on the following Top 10 Google search result snippets for the query "{question}":
         
-        {serp_data}
+        {serp_context}
         
-        Please provide a comprehensive analysis including:
-        1. Key insights and findings from the search results
-        2. Relevant trends or patterns in the data
-        3. Important information and recommendations
-        4. Summary of the most relevant findings
-        
-        Format your response as a structured analysis.
+        Please provide a comprehensive analysis of these results. Summarize the key findings, identify the main brands or topics discussed, and conclude with the most relevant insights.
         """
         
-        # Get analysis from OpenAI
         analysis_response = await openai_client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are an expert research analyst. Provide clear, structured analysis based on the given web search results."},
+                {"role": "system", "content": "You are an expert research analyst. Provide clear, structured analysis based on the given search results."},
                 {"role": "user", "content": analysis_prompt}
             ]
         )
@@ -94,10 +102,10 @@ async def _perform_web_analysis(question: str) -> WebAnalysis:
         
         # Create WebAnalysis object
         web_analysis = WebAnalysis(
-            source="BrightData Web Unlocker API + OpenAI",
+            source="BrightData SERP API + OpenAI",
             content=analysis_text,
             timestamp=datetime.now(timezone.utc),
-            confidence_score=0.90  # High confidence for Web Unlocker + OpenAI analysis
+            confidence_score=0.90  # High confidence for SERP API + OpenAI analysis
         )
         
         print(f"   ✅ Web analysis completed successfully")
@@ -121,6 +129,9 @@ async def _simulate_chatgpt_response(question: str) -> ChatGPTResponse:
     
     try:
         # Use a completely different approach - direct question without complex prompting
+        print(f"   🔍 Making main OpenAI call with question: {question}")
+        print(f"   🔍 Using client with base_url: {openai_client.base_url}")
+        
         response = await openai_client.chat.completions.create(
             model="gpt-4o",
             messages=[
@@ -146,9 +157,12 @@ async def _simulate_chatgpt_response(question: str) -> ChatGPTResponse:
         Return only a JSON array of entity names.
         """
         
+        print(f"   🔍 Making entity extraction call with prompt: {entity_extraction_prompt[:100]}...")
+        
         entity_response = await openai_client.chat.completions.create(
             model="gpt-4o",
             messages=[
+                {"role": "system", "content": "You are a helpful assistant that extracts entity names from text. Return only JSON."},
                 {"role": "user", "content": entity_extraction_prompt}
             ],
             response_format={"type": "json_object"}

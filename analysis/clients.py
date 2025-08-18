@@ -14,24 +14,29 @@ if not brightdata_api_key:
 
 # --- Client Initialization ---
 
-# Initialize the OpenAI async client
-# The library automatically handles authentication by reading the OPENAI_API_KEY env var.
-openai_client = AsyncOpenAI()
-
-# BrightData SERP API configuration
-BRIGHTDATA_API_URL = "https://api.brightdata.com/request"
-BRIGHTDATA_API_HEADERS = {
-    "Authorization": f"Bearer {brightdata_api_key}",
-    "Content-Type": "application/json"
-}
-
-# Create a client for BrightData SERP API calls
-serp_client = httpx.AsyncClient(
-    headers=BRIGHTDATA_API_HEADERS,
-    timeout=30.0
+# Initialize the OpenAI async client, EXPLICITLY setting the base_url.
+# This overrides any environment variables like OPENAI_BASE_URL and forces
+# the client to talk directly to the official OpenAI API, bypassing any proxies.
+openai_client = AsyncOpenAI(
+    base_url="https://api.openai.com/v1"
 )
 
-# Keep the old client for backward compatibility (can be removed later)
+# BrightData API configuration (Corrected)
+BRIGHTDATA_API_URL = "https://api.brightdata.com/request"  # <-- CORRECTED ENDPOINT
+brightdata_headers = {
+    "Authorization": f"Bearer {brightdata_api_key}",
+    "Content-Type": "application/json",
+}
+
+# Create a general-purpose client for BrightData API calls
+brightdata_client = httpx.AsyncClient(
+    base_url=BRIGHTDATA_API_URL,  # <-- CORRECTED BASE URL
+    headers=brightdata_headers,
+    timeout=60.0,  # Increased timeout slightly for potentially long scrapes
+)
+
+# Clean up old/unused client variables
+serp_client = None 
 http_client = None
 mcp_client = None
 BRIGHTDATA_MCP_URL = None
