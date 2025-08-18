@@ -12,9 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 # Import project components
-from src.database import engine, Base, AsyncSessionLocal
-from src.models import Analysis
-from src.schemas import (
+from database import engine, Base, AsyncSessionLocal
+from models import Analysis
+from schemas import (
     AnalysisRequest,
     AnalysisResponse,
     StatusResponse,
@@ -23,7 +23,7 @@ from src.schemas import (
     ErrorType,
     StatusEnum,
 )
-from src.analysis.orchestrator import run_full_analysis 
+from analysis.orchestrator import run_full_analysis 
 
 # --- Application Lifecycle ---
 

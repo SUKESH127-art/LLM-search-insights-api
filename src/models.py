@@ -4,8 +4,8 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import String, DateTime, Integer, JSON, Text
 from sqlalchemy.orm import Mapped, mapped_column
-from src.database import Base
-from src.schemas import StatusEnum
+from database import Base
+from schemas import StatusEnum
 import os # Keep os for getenv
 
 CACHE_TTL_HOURS = int(os.getenv("CACHE_TTL_HOURS", 24))

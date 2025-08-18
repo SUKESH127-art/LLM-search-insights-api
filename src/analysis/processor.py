@@ -1,5 +1,5 @@
 # src/analysis/processor.py
-from src.schemas import WebAnalysis, ChatGPTResponse
+from schemas import WebAnalysis, ChatGPTResponse
 
 def process_analysis_results(web_result: WebAnalysis, gpt_result: ChatGPTResponse) -> tuple[WebAnalysis, ChatGPTResponse]:
     """

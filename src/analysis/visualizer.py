@@ -1,8 +1,8 @@
 # src/analysis/visualizer.py
 import json
 
-from src.analysis.clients import openai_client
-from src.schemas import VisualizationData, BrandVisibilityScore
+from analysis.clients import openai_client
+from schemas import VisualizationData, BrandVisibilityScore
 
 async def extract_visualization_data(web_analysis_text: str) -> VisualizationData:
     """

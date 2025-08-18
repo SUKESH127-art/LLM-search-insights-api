@@ -3,14 +3,14 @@ import asyncio
 from datetime import datetime, timezone
 from sqlalchemy import update
 
-from src.database import AsyncSessionLocal
-from src.models import Analysis
-from src.schemas import StatusEnum, FullAnalysisResult
+from database import AsyncSessionLocal
+from models import Analysis
+from schemas import StatusEnum, FullAnalysisResult
 
 # Import from our new, specialized modules
-from src.analysis.collector import perform_web_analysis, simulate_chatgpt_response
-from src.analysis.processor import process_analysis_results
-from src.analysis.visualizer import extract_visualization_data
+from analysis.collector import perform_web_analysis, simulate_chatgpt_response
+from analysis.processor import process_analysis_results
+from analysis.visualizer import extract_visualization_data
 
 # --- Database Interaction Functions ---
 
