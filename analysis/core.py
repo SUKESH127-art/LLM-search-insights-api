@@ -3,7 +3,7 @@
 import asyncio
 import json
 from datetime import datetime, timezone
-
+from typing import List
 from sqlalchemy import update
 
 # Import our new clients
@@ -36,41 +36,50 @@ async def _perform_web_analysis(question: str) -> WebAnalysis:
         # The query is part of the URL. We must add '&brd_json=1' to get parsed JSON.
         target_url = f"https://www.google.com/search?q={question.replace(' ', '+')}&brd_json=1"
 
-        # The payload is simpler for direct access
+        # The payload for BrightData SERP API
         payload = {
             "zone": "serp_api1", 
             "url": target_url,
-            "format": "raw"
+            "format": "json"
         }
         
         # Step 2: Make the API call using the correct client and endpoint
         print(f"   📤 Sending request to BrightData...")
         print(f"   📝 Payload: {payload}")
-        response = await brightdata_client.post(url="/", json=payload) # The base URL is already set in the client
         
-        # Add detailed error handling for debugging
+        # Try the correct BrightData SERP API endpoint
+        try:
+            response = await brightdata_client.post(url="/", json=payload)
+        except Exception as api_error:
+            print(f"   ❌ BrightData API call failed: {api_error}")
+            # Fallback to a simpler approach
+            payload = {
+                "zone": "serp_api1",
+                "query": question,
+                "format": "json"
+            }
+            print(f"   🔄 Trying fallback payload: {payload}")
+            response = await brightdata_client.post(url="/", json=payload)
+        
         if response.status_code != 200:
             print(f"   ❌ BrightData API error: {response.status_code}")
             print(f"   📄 Error response: {response.text}")
             response.raise_for_status()
-        
-        response.raise_for_status()
         
         search_results = response.json()
         print("   ✅ Received structured JSON response from BrightData.")
         
         # Step 3: Extract and combine the useful text snippets for the LLM
         snippets = []
-        if isinstance(search_results, list): # Some responses are a list of results
+        if isinstance(search_results, list):
             search_results = search_results[0]
 
         if search_results.get("organic"):
-            for result in search_results["organic"][:10]: # Use top 10 results
+            for result in search_results["organic"][:10]:
                 if result.get("title") and result.get("description"):
                     snippets.append(f"Title: {result['title']}\nSnippet: {result['description']}\n---")
         
         if not snippets:
-            # Add more context to the error for better debugging
             raise ValueError(f"SERP API did not return any organic results. Response preview: {str(search_results)[:500]}")
 
         serp_context = "\n".join(snippets)
@@ -101,23 +110,18 @@ async def _perform_web_analysis(question: str) -> WebAnalysis:
         
         analysis_text = analysis_response.choices[0].message.content
         
-        # Create WebAnalysis object
-        web_analysis = WebAnalysis(
+        return WebAnalysis(
             source="BrightData SERP API + OpenAI",
             content=analysis_text,
             timestamp=datetime.now(timezone.utc),
-            confidence_score=0.90  # High confidence for SERP API + OpenAI analysis
+            confidence_score=0.95
         )
         
-        print(f"   ✅ Web analysis completed successfully")
-        return web_analysis
-        
     except Exception as e:
-        print(f"   ❌ Error in web analysis: {str(e)}")
-        # Return a fallback analysis
+        print(f"   ❌ Error in web analysis: {e}")
         return WebAnalysis(
             source="Fallback Analysis",
-            content=f"Unable to perform web analysis due to error: {str(e)}",
+            content=f"Unable to perform web analysis due to error: {e}",
             timestamp=datetime.now(timezone.utc),
             confidence_score=0.0
         )
@@ -263,12 +267,51 @@ async def _extract_visualization_data(web_analysis_text: str) -> VisualizationDa
         print(f"   🔍 Error type: {type(e).__name__}")
         import traceback
         print(f"   📋 Full traceback: {traceback.format_exc()}")
-        # Return a fallback object that conforms to the schema
-        return VisualizationData(
-            top_5_brands=[],
-            brand_scores=[],
-            methodology_explanation=f"Data extraction failed due to an error: {e}"
-        )
+        
+        # Check if this is due to failed web analysis
+        if "Unable to perform web analysis" in web_analysis_text or "SERP API did not return" in web_analysis_text:
+            # When web analysis fails, we can't extract brand visibility from search results
+            # But we can provide a meaningful message about why the data is limited
+            return VisualizationData(
+                top_5_brands=["Web analysis unavailable"],
+                brand_scores=[
+                    {
+                        "brand_name": "Web analysis unavailable",
+                        "visibility_score": 1,
+                        "rank": 1,
+                        "mentions": 0
+                    }
+                ],
+                methodology_explanation="Web analysis failed, so brand visibility data could not be extracted from search results. The system fell back to ChatGPT knowledge only, which provides general information but not search-based visibility metrics."
+            )
+        elif "No brand information could be extracted" in web_analysis_text:
+            # Handle the case where the LLM couldn't extract brand data
+            return VisualizationData(
+                top_5_brands=["Brand data unavailable"],
+                brand_scores=[
+                    {
+                        "brand_name": "Brand data unavailable",
+                        "visibility_score": 1,
+                        "rank": 1,
+                        "mentions": 0
+                    }
+                ],
+                methodology_explanation="The LLM was unable to extract brand information from the provided text. This may be due to insufficient content or formatting issues."
+            )
+        else:
+            # Return a fallback object that conforms to the schema for other errors
+            return VisualizationData(
+                top_5_brands=["Analysis error"],
+                brand_scores=[
+                    {
+                        "brand_name": "Analysis error",
+                        "visibility_score": 1,
+                        "rank": 1,
+                        "mentions": 0
+                    }
+                ],
+                methodology_explanation=f"Data extraction failed due to an error: {e}"
+            )
 
 
 # --- Database Interaction Functions ---
@@ -324,15 +367,51 @@ async def run_full_analysis(analysis_id: str):
         
         await update_job_status(analysis_id, StatusEnum.SYNTHESIZING, 75, "Synthesizing final report and visualization")
 
-        # --- REVISED SYNTHESIS STEP ---
-        # Call our new function, passing ONLY the web analysis text.
+        # Check if web analysis was successful or failed
         print(f"[{analysis_id}] 🔍 Starting visualization extraction...")
         print(f"[{analysis_id}] 📝 Web analysis content length: {len(web_analysis_result.content)}")
         print(f"[{analysis_id}] 📝 Web analysis preview: {web_analysis_result.content[:200]}...")
         
-        final_visualization = await _extract_visualization_data(
-            web_analysis_text=web_analysis_result.content
-        )
+        # Determine if web analysis was successful or failed
+        if "Unable to perform web analysis" in web_analysis_result.content or "SERP API did not return" in web_analysis_result.content:
+            # Web analysis failed - create fallback visualization using ChatGPT data
+            print(f"[{analysis_id}] 🔄 Web analysis failed, creating fallback visualization from ChatGPT data...")
+            
+            # Create meaningful visualization data from ChatGPT response
+            chatgpt_brands = chatgpt_simulation_result.identified_brands[:5]  # Top 5 brands
+            if chatgpt_brands:
+                brand_scores = []
+                for i, brand in enumerate(chatgpt_brands):
+                    brand_scores.append({
+                        "brand_name": brand,
+                        "visibility_score": max(1, 100 - (i * 20)),  # Score from 100 down to 1
+                        "rank": i + 1,
+                        "mentions": 1  # ChatGPT mentioned each brand once
+                    })
+                
+                final_visualization = VisualizationData(
+                    top_5_brands=chatgpt_brands,
+                    brand_scores=brand_scores,
+                    methodology_explanation="Web analysis failed, so brand visibility scores are estimated based on ChatGPT's knowledge ranking. Higher scores indicate brands that ChatGPT considers more prominent in the industry."
+                )
+            else:
+                # No brands identified by ChatGPT either
+                final_visualization = VisualizationData(
+                    top_5_brands=["No brands identified"],
+                    brand_scores=[{
+                        "brand_name": "No brands identified",
+                        "visibility_score": 1,
+                        "rank": 1,
+                        "mentions": 0
+                    }],
+                    methodology_explanation="Neither web analysis nor ChatGPT could identify specific brands for this query."
+                )
+        else:
+            # Web analysis succeeded - try to extract visualization data normally
+            print(f"[{analysis_id}] ✅ Web analysis succeeded, extracting visualization data...")
+            final_visualization = await _extract_visualization_data(
+                web_analysis_text=web_analysis_result.content
+            )
         
         print(f"[{analysis_id}] ✅ Visualization extraction complete!")
         print(f"[{analysis_id}] 📊 Final visualization: {final_visualization}")

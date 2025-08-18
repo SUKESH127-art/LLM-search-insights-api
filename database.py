@@ -1,10 +1,9 @@
 # database.py
 
-import os
-from dotenv import load_dotenv
 from sqlalchemy import MetaData
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase
+import os # Keep os for getenv
 
 # Define a naming convention for all database constraints.
 # This makes your database schema clean and predictable.
