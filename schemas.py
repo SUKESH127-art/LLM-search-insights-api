@@ -58,9 +58,21 @@ class ChatGPTResponse(BaseModel):
     simulated_response: str
     identified_brands: List[str]
 
+# --- REVISED VISUALIZATION SCHEMAS ---
+class BrandVisibilityScore(BaseModel):
+    brand_name: str
+    visibility_score: int = Field(..., description="A score from 1-100 indicating search visibility.", ge=1, le=100)
+    rank: int = Field(..., description="The calculated rank of the brand (1 being the highest).")
+    mentions: int = Field(..., description="The number of times the brand was mentioned in the source text.")
+
 class VisualizationData(BaseModel):
-    chart_type: str
-    data: Dict[str, Any]
+    chart_type: str = "bar_chart_brand_visibility"
+    title: str = "Top 5 Brands by LLM Search Visibility"
+    x_axis_label: str = "Brand Name"
+    y_axis_label: str = "Visibility Score (1-100)"
+    top_5_brands: List[str] = Field(..., description="A list of the top 5 brand names for easy access.")
+    brand_scores: List[BrandVisibilityScore] = Field(..., description="The detailed scores for each of the top 5 brands.")
+    methodology_explanation: str = Field(..., description="The LLM's explanation of how it calculated the scores.")
 
 # The main model for the final result. This is what will be stored in the
 # database's JSON field and returned by the final results endpoint.

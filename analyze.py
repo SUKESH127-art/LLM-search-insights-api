@@ -162,12 +162,27 @@ class AnalysisCLI:
     def format_visualization(self, visualization: dict) -> str:
         """Format visualization data nicely."""
         chart_type = visualization.get("chart_type", "Unknown")
-        data = visualization.get("data", {})
+        title = visualization.get("title", "No title")
         
         formatted = f"Chart Type: {Colors.BOLD}{chart_type}{Colors.ENDC}\n"
-        formatted += "Data:\n"
-        for key, value in data.items():
-            formatted += f"  • {key}: {Colors.BOLD}{value}{Colors.ENDC}\n"
+        formatted += f"Title: {Colors.BOLD}{title}{Colors.ENDC}\n\n"
+        
+        # Handle the new rich visualization structure
+        if "brand_scores" in visualization and visualization["brand_scores"]:
+            formatted += f"{Colors.OKGREEN}Top Brands by Visibility Score:{Colors.ENDC}\n"
+            for brand_score in visualization["brand_scores"]:
+                brand_name = brand_score.get("brand_name", "Unknown")
+                score = brand_score.get("visibility_score", 0)
+                rank = brand_score.get("rank", 0)
+                mentions = brand_score.get("mentions", 0)
+                formatted += f"  {rank}. {Colors.BOLD}{brand_name}{Colors.ENDC} - Score: {Colors.OKCYAN}{score}{Colors.ENDC} (Mentions: {mentions})\n"
+        else:
+            formatted += f"{Colors.WARNING}No brand scores available{Colors.ENDC}\n"
+        
+        # Add methodology explanation if available
+        methodology = visualization.get("methodology_explanation", "")
+        if methodology:
+            formatted += f"\n{Colors.OKBLUE}Methodology:{Colors.ENDC}\n{methodology}\n"
         
         return formatted
     
